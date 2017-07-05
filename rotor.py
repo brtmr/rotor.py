@@ -2,20 +2,20 @@
 ''' Background image rotation script for i3
 '''
 
-import json
 import os.path
 import subprocess
 import random
 import time
 
 IMAGE_FOLDER = '/home/basti/owncloud/backgrounds'
-ROTOR_FILE = '/home/basti/owncloud/backgrounds.json'
+UNSEEN_FILE = '/home/basti/owncloud/backgrounds_unseen'
+ALL_IMAGES_FILE = '/home/basti/owncloud/backgrounds_all'
 PERIOD = 60 * 5
 
-ROTOR = {}
 
 def sync():
-    global ROTOR
+    UNSEEN = load(UNSEEN_FILE)
+    ALL_IMAGES = load(ALL_IMAGES_FILE)
     '''opens the image folder and creates a list of all image pathnames.
     adds missing filenames to the rotor file, and removes those no longer 
     present.
@@ -26,41 +26,48 @@ def sync():
     find_result = subprocess.run(
             command, 
             stdout=subprocess.PIPE )
-    images = find_result.stdout.decode().split('\n')[:-1]
-    load_rotor()
-    # add the filenames that are new:
-    new_images = [img for img in images if img not in ROTOR]
-    for image in new_images:
-        ROTOR[image] = 0
-    removed_images = [img for img in ROTOR.keys() if img not in images]
-    for image in removed_images:
-        del ROTOR[image]
-    save_rotor()
+    found_images = set(find_result.stdout.decode().split('\n'))
+    new_images = found_images - ALL_IMAGES
+    deleted_images = ALL_IMAGES - found_images
+    UNSEEN      |= new_images
+    ALL_IMAGES  |= new_images
+    UNSEEN      -= deleted_images
+    ALL_IMAGES  -= deleted_images
+    save(ALL_IMAGES, ALL_IMAGES_FILE)
+    save(UNSEEN, UNSEEN_FILE)
 
-def save_rotor():
-    global ROTOR
-    with open(ROTOR_FILE, 'w+') as f:
-        json.dump(ROTOR, f)
 
-def load_rotor():
-    global ROTOR
-    if os.path.exists(ROTOR_FILE):
-        with open(ROTOR_FILE) as f:
-            ROTOR = json.load(f)
+def save(collection, filename):
+    with open(filename, 'w+') as f:
+        for filename in collection:
+            print(filename, file=f)
+
+
+def load(filename):
+    if os.path.exists(filename):
+        with open(filename) as f:
+            filenames = f.read().splitlines()
+        return set((filename for filename in filenames if filename))
+    return set()
+
 
 def display():
-    global ROTOR
-    ''' create the set of images that has the least amount of views, then 
-    pick one and display. '''
-    least_views = min(ROTOR.values())
-    least_view_filenames = [fn for fn, views in ROTOR.items() 
-                            if views == least_views]
-    filename = random.choice(least_view_filenames)
+    ''' pick one unseen image and display. '''
+    UNSEEN = load(UNSEEN_FILE)
+    print(UNSEEN)
+    if not UNSEEN:
+        # we have seen all images.
+        # set UNSEEN to ALL_IMAGES to restart the rotation.
+        UNSEEN = load(ALL_IMAGES_FILE)
+    filename = random.choice(list(UNSEEN))
     subprocess.run(['feh', '--bg-fill', filename])
-    ROTOR[filename] += 1
-    save_rotor()
+    UNSEEN.remove(filename)
+    save(UNSEEN, UNSEEN_FILE)
 
-while True:
-    sync()
-    display()
-    time.sleep(PERIOD) 
+sync()
+display()
+
+#while True:
+#    sync()
+#    display()
+#    time.sleep(PERIOD) 
