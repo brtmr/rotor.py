@@ -3,14 +3,17 @@
 '''
 
 import os.path
-import subprocess
 import random
+import subprocess
+import sys
 import time
+import os
 
 IMAGE_FOLDER = '/home/basti/owncloud/backgrounds'
 UNSEEN_FILE = '/home/basti/owncloud/backgrounds_unseen'
 ALL_IMAGES_FILE = '/home/basti/owncloud/backgrounds_all'
 PERIOD = 60 * 5
+DEVNULL = open(os.devnull, 'w')
 
 
 def sync():
@@ -25,7 +28,7 @@ def sync():
                 '*\.jpg', '-o', '-iname', '*\.png', ')', '-print']
     find_result = subprocess.run(
             command, 
-            stdout=subprocess.PIPE )
+            stdout=subprocess.PIPE,)
     found_images = set(find_result.stdout.decode().split('\n'))
     new_images = found_images - ALL_IMAGES
     deleted_images = ALL_IMAGES - found_images
@@ -54,20 +57,20 @@ def load(filename):
 def display():
     ''' pick one unseen image and display. '''
     UNSEEN = load(UNSEEN_FILE)
-    print(UNSEEN)
     if not UNSEEN:
         # we have seen all images.
         # set UNSEEN to ALL_IMAGES to restart the rotation.
         UNSEEN = load(ALL_IMAGES_FILE)
     filename = random.choice(list(UNSEEN))
-    subprocess.run(['feh', '--bg-fill', filename])
+    subprocess.run(['feh', '--bg-fill', filename], stderr=DEVNULL)
+    print(filename)
     UNSEEN.remove(filename)
     save(UNSEEN, UNSEEN_FILE)
 
-sync()
-display()
-
-#while True:
-#    sync()
-#    display()
-#    time.sleep(PERIOD) 
+while True:
+    sync()
+    display()
+    # apply only once, if the -o argument was provided
+    if sys.argv[-1] == '-o':
+        break
+    time.sleep(PERIOD) 
